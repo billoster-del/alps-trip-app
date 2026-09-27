@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alps Trip App</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0f1419; --card: #1b232c; --accent: #4fb3ff; --accent2: #7fd88f;
+    --text: #e6edf3; --muted: #8b98a5; --border: #2d3947; --warn: #f5a623; --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text); padding-bottom: 70px;
+  }
+  .content { padding: 16px; }
+  h1 { font-size: 1.25rem; margin: 0 0 4px 0; }
+  h2 { font-size: 1rem; color: var(--accent); margin: 0 0 10px 0; }
+  .subtitle { color: var(--muted); font-size: 0.82rem; margin-bottom: 16px; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  select, button, input, textarea {
+    background: #12181f; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px; font-size: 0.95rem; width: 100%; font-family: inherit;
+  }
+  button { background: var(--accent); color: #06121c; font-weight: 700; border: none; margin-top: 8px; cursor: pointer; }
+  button.secondary { background: #22303c; color: var(--text); }
+  button:active { opacity: 0.8; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  ul { margin: 6px 0; padding-left: 18px; }
+  li { margin-bottom: 6px; font-size: 0.9rem; line-height: 1.4; }
+  .section-label { text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; color: var(--accent2); margin: 14px 0 4px 0; font-weight: 700; }
+  .coord { font-family: monospace; color: var(--muted); font-size: 0.75rem; }
+  .empty { color: var(--muted); font-style: italic; font-size: 0.85rem; }
+  .badge { display: inline-block; background: #2a3441; color: var(--muted); font-size: 0.7rem; padding: 2px 8px; border-radius: 6px; margin-right:6px;}
+  .dish-list span { display: inline-block; background: #22303c; padding: 3px 8px; border-radius: 6px; margin: 2px 4px 2px 0; font-size: 0.8rem; }
+  .distance-pill { display: inline-block; background: #1c3a2e; color: var(--accent2); font-size: 0.75rem; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; font-weight: 600; }
+  .distance-pill.far { background: #3a2e1c; color: var(--warn); }
+  #status { font-size: 0.8rem; color: var(--muted); margin-top: 8px; min-height: 1.2em; }
+  #status.warn { color: var(--warn); } #status.ok { color: var(--accent2); }
+
+  .tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #14191f; border-top: 1px solid var(--border); z-index: 100; padding-bottom: env(safe-area-inset-bottom, 0); overflow-x: auto; }
+  .tab { flex: 1; min-width: 58px; text-align: center; padding: 10px 2px 8px 2px; color: var(--muted); font-size: 0.62rem; cursor: pointer; border: none; background: none; font-family: inherit; }
+  .tab .icon { font-size: 1.15rem; display: block; margin-bottom: 2px; }
+  .tab.active { color: var(--accent); }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .day-card { border-left: 3px solid var(--border); padding-left: 10px; margin-bottom: 12px; cursor: pointer; transition: background 0.15s; }
+  .day-card:active { background: #1c2530; }
+  .day-card.today { border-left-color: var(--accent2); background: #1c2530; border-radius: 0 8px 8px 0; padding: 10px; }
+  .day-num { font-weight: 700; color: var(--accent); font-size: 0.85rem; }
+  .day-title { font-weight: 600; }
+  .day-meta { color: var(--muted); font-size: 0.78rem; }
+  .day-chevron { float: right; color: var(--muted); }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: flex-end; justify-content: center; }
+  .modal-overlay.active { display: flex; }
+  .modal-sheet { background: var(--card); border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; padding: 20px; border: 1px solid var(--border); border-bottom: none; }
+  .modal-close { text-align: right; }
+  .modal-close span { color: var(--muted); font-size: 1.4rem; cursor: pointer; padding: 4px 10px; }
+  .doc-link { display: block; background: #22303c; color: var(--accent); text-decoration: none; padding: 10px; border-radius: 8px; margin-top: 8px; font-size: 0.88rem; }
+
+  .check-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .check-item input { width: auto; margin: 0; }
+  .check-item.done label { text-decoration: line-through; color: var(--muted); }
+  .check-item label { flex: 1; font-size: 0.9rem; }
+
+  .currency-result { font-size: 1.6rem; font-weight: 700; color: var(--accent2); text-align: center; padding: 10px 0 4px 0; }
+  .rate-meta { text-align:center; font-size: 0.72rem; color: var(--muted); margin-bottom: 8px; }
+
+  .phone-link { color: var(--accent); text-decoration: none; font-weight: 700; }
+
+  .journal-entry { background: #171f28; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+  .journal-meta { font-size: 0.72rem; color: var(--muted); display:flex; justify-content:space-between; align-items:center; }
+  .journal-actions span { cursor:pointer; color: var(--accent); font-size: 0.75rem; margin-left: 10px; }
+  .journal-actions span.del { color: var(--danger); }
+  .journal-text { margin-top: 4px; white-space: pre-wrap; }
+
+  .phrase-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); font-size:0.87rem; gap: 8px;}
+  .phrase-en { color: var(--muted); flex: 1; }
+  .phrase-local { font-weight: 700; text-align: right; }
+  .phrase-cat { font-size: 0.68rem; text-transform: uppercase; color: var(--accent2); margin: 12px 0 2px 0; font-weight: 700; }
+
+  .translator-result { background: #171f28; border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 1.05rem; min-height: 24px; }
+
+  .doc-card { display: flex; align-items: center; gap: 12px; background: #171f28; border-radius: 10px; padding: 12px; margin-bottom: 10px; cursor: pointer; border: 1px solid var(--border); }
+  .doc-card:active { background: #1c2530; }
+  .doc-icon { font-size: 1.6rem; flex-shrink: 0; }
+  .doc-info { flex: 1; min-width: 0; }
+  .doc-name { font-weight: 600; font-size: 0.9rem; }
+  .doc-desc { color: var(--muted); font-size: 0.75rem; margin-top: 2px; }
+  .doc-status { font-size: 0.65rem; padding: 2px 8px; border-radius: 20px; background: #3a2e1c; color: var(--warn); flex-shrink: 0; }
+  .doc-status.ready { background: #1c3a2e; color: var(--accent2); }
+  .doc-category { font-size: 0.68rem; text-transform: uppercase; color: var(--accent2); margin: 16px 0 6px 0; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="view active" id="view-nearby">
+  <div class="content">
+    <h1>Alps Trip App</h1>
+    <div class="subtitle">Live GPS local guide</div>
+    <div class="panel">
+      <h2>Your Location</h2>
+      <button onclick="locateMe()">Use My Real GPS Location</button>
+      <div id="status">Tap the button to detect your location.</div>
+      <div style="text-align:center; margin-top:8px;">
+        <span style="font-size:0.78rem; color:var(--accent); text-decoration:underline; cursor:pointer;" onclick="toggleManual()">pick a location manually</span>
+      </div>
+      <div id="manualPanel" style="display:none; margin-top:10px;">
+        <div class="row">
+          <button class="secondary" onclick="setRegion('alps')">Alps Trip</button>
+          <button class="secondary" onclick="setRegion('maritime')">Maritime Test</button>
+        </div>
+        <select id="locationPicker" onchange="renderManual()" style="margin-top:8px;"></select>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Map</h2>
+      <div id="map" style="height: 280px; border-radius: 8px; overflow: hidden;"></div>
+    </div>
+    <div class="panel" id="resultPanel"><div class="empty">Waiting for location...</div></div>
+  </div>
+</div>
+
+<div class="view" id="view-itinerary">
+  <div class="content">
+    <h1>Itinerary</h1>
+    <div class="subtitle">Country Roads of Bavaria, Switzerland & Austria &middot; 10/02/26-10/13/26</div>
+    <div class="panel"><h2>Trip Progress</h2><div id="tripProgress"></div></div>
+    <div id="itineraryList"></div>
+  </div>
+</div>
+
+<div class="view" id="view-docs">
+  <div class="content">
+    <h1>Trip Documents</h1>
+    <div class="subtitle">Quick access to your Insight Vacations paperwork</div>
+    <div class="panel" style="background:#1c1810; border-color:#3a2e1c;">
+      <div style="font-size:0.85rem;">📎 These are placeholders. Real links activate once PDFs are placed in a /docs folder in this repo.</div>
+    </div>
+    <div id="docsList"></div>
+  </div>
+</div>
+
+<div class="view" id="view-checklist">
+  <div class="content">
+    <h1>Packing Checklist</h1>
+    <div class="subtitle">Tap to check off &middot; saved automatically on this device</div>
+    <div class="panel">
+      <h2>Essentials</h2>
+      <div id="checklistItems"></div>
+      <button class="secondary" onclick="resetChecklist()">Reset Checklist</button>
+    </div>
+  </div>
+</div>
+
+<div class="view" id="view-tools">
+  <div class="content">
+    <h1>Tools</h1>
+    <div class="panel">
+      <h2>Currency Converter</h2>
+      <div class="row">
+        <input type="number" id="cadAmount" placeholder="CAD amount" value="100" oninput="convertCurrency()">
+        <select id="targetCurrency" onchange="convertCurrency()">
+          <option value="EUR">EUR (Euro)</option>
+          <option value="CHF">CHF (Swiss Franc)</option>
+        </select>
+      </div>
+      <div class="currency-result" id="currencyResult">--</div>
+      <div class="rate-meta" id="rateMeta">Loading live rate...</div>
+      <button class="secondary" onclick="fetchRates(true)">Refresh Rate</button>
+    </div>
+    <div class="panel">
+      <h2>Quick Translator</h2>
+      <div class="row">
+        <select id="translateTarget">
+          <option value="de">German</option>
+          <option value="fr">French</option>
+          <option value="it">Italian</option>
+        </select>
+      </div>
+      <textarea id="translateInput" rows="2" placeholder="Type an English phrase..." style="margin-top:8px;"></textarea>
+      <button onclick="translateText()">Translate</button>
+      <div class="translator-result" id="translateResult">Translation will appear here.</div>
+      <div class="empty" style="margin-top:6px;">Uses MyMemory's free translation API. Needs an internet connection.</div>
+    </div>
+    <div class="panel">
+      <h2>Phrasebook</h2>
+      <select id="phraseLang" onchange="renderPhrases()">
+        <option value="de">German (Austria/Germany)</option>
+        <option value="fr">French (Switzerland)</option>
+      </select>
+      <div id="phraseList" style="margin-top:10px;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="view" id="view-journal">
+  <div class="content">
+    <h1>Trip Journal</h1>
+    <div class="subtitle">Quick notes, saved on this device</div>
+    <div class="panel">
+      <textarea id="journalInput" rows="3" placeholder="What's happening right now?"></textarea>
+      <input type="hidden" id="journalEditId" value="">
+      <button onclick="saveJournalEntry()" id="journalSaveBtn">Save Entry</button>
+      <button class="secondary" id="journalCancelBtn" style="display:none;" onclick="cancelEdit()">Cancel Edit</button>
+    </div>
+    <div id="journalEntries"></div>
+  </div>
+</div>
+
+<div class="view" id="view-emergency">
+  <div class="content">
+    <h1>Emergency Info</h1>
+    <div class="subtitle">One-tap access -- no scrolling required</div>
+    <div class="panel">
+      <h2>Travel Assist (24hr)</h2>
+      <a class="phone-link" href="tel:18003219998">1.800.321.9998 (Canada/US toll-free)</a><br><br>
+      <a class="phone-link" href="tel:5197423287">519.742.3287 (collect, worldwide)</a>
+      <div class="section-label">Policy Info</div>
+      <ul>
+        <li>Provider: Equitable Life Group Benefits</li>
+        <li>Policy: 95539 &middot; Certificate: 0000010089</li>
+        <li>Cardholders: Paul Billo (Member), Angela Billo (Spouse)</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h2>Trip Contacts</h2>
+      <div class="section-label">Travel Director - Sue Mason</div>
+      <ul><li>WhatsApp: +44 7887 551355</li><li>Email: insightsue@icloud.com</li></ul>
+      <div class="section-label">Insight European Guest Services</div>
+      <ul><li>Email: EuropeanGuestServices@ttc.com</li><li><a class="phone-link" href="tel:+442076208900">+44 20 7620 8900</a></li></ul>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="dayModal">
+  <div class="modal-sheet">
+    <div class="modal-close"><span onclick="closeDayModal()">&times;</span></div>
+    <div id="dayModalContent"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="docModal">
+  <div class="modal-sheet">
+    <div class="modal-close"><span onclick="closeDocModal()">&times;</span></div>
+    <div id="docModalContent"></div>
+  </div>
+</div>
+
+<div class="tabbar">
+  <button class="tab active" onclick="showView('nearby', this)"><span class="icon">📍</span>Nearby</button>
+  <button class="tab" onclick="showView('itinerary', this)"><span class="icon">🗝️</span>Itinerary</button>
+  <button class="tab" onclick="showView('docs', this)"><span class="icon">📄</span>Docs</button>
+  <button class="tab" onclick="showView('checklist', this)"><span class="icon">✅</span>Packing</button>
+  <button class="tab" onclick="showView('tools', this)"><span class="icon">🧮</span>Tools</button>
+  <button class="tab" onclick="showView('journal', this)"><span class="icon">📓</span>Journal</button>
+  <button class="tab" onclick="showView('emergency', this)"><span class="icon">🚨</span>SOS</button>
+</div>
+
+<script>
+function fmtDate(isoStr) {
+  const d = new Date(isoStr + "T00:00:00");
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${mm}/${dd}/${yy}`;
+}
+
+function showView(name, btn) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'nearby' && map) setTimeout(() => map.invalidateSize(), 100);
+}
+
+const DOCUMENTS = [
+  { category: "Booking & Itinerary", docs: [
+      { name: "Official Trip Itinerary", desc: "Full 12-day Travel Guide, Insight Vacations", file: "001_Mr_P_Billo_6_ItineraryContent_E727N26.pdf", icon: "🗺️", ready: false },
+      { name: "Booking Confirmation", desc: "Reference A208521, tour E727N26/02J26a", file: "001_Mr_P_Billo_1_BookingConfirmation.pdf", icon: "📋", ready: false }
+  ]},
+  { category: "Accommodations", docs: [
+      { name: "Hotel List", desc: "All 6 hotels with addresses and phone numbers", file: "001_Mr_P_Billo_2_HotelList.pdf", icon: "🏨", ready: false }
+  ]},
+  { category: "Vouchers & Travel Docs", docs: [
+      { name: "Vouchers (Info Only)", desc: "Printed vouchers not required for most segments", file: "001_Mr_P_Billo_3_VouchersINFOONLY.pdf", icon: "🎫", ready: false },
+      { name: "Park'N Fly Parking Coupon", desc: "Airport parking discount, expires Nov 30 2026", file: "CANS-Park-n-Fly-Coupon-Expiry-Date-November-30th-2026.pdf", icon: "🅿️", ready: false }
+  ]},
+  { category: "Insurance & Emergency", docs: [
+      { name: "Equitable Benefits Card - Paul", desc: "Policy 95539, Plan Member", file: "Paul-Billo-Benefit-card.pdf", icon: "🩺", ready: false },
+      { name: "Equitable Benefits Card - Angela", desc: "Policy 95539, Spouse", file: "Angela-Billo-benefit-card.pdf", icon: "🩺", ready: false }
+  ]},
+  { category: "From Your Travel Director", docs: [
+      { name: "Sue Mason - Handy Hints", desc: "Packing tips, Vox audio system, contact info", file: "727HandyHInts.pdf", icon: "💡", ready: false },
+      { name: "Hotel Contact List (TD copy)", desc: "Sue's own hotel/contact reference sheet", file: "Country Roads of Bavaria Switzerland and Austria-Hotel_Contact_List.pdf", icon: "📞", ready: false }
+  ]}
+];
+
+function renderDocuments() {
+  const container = document.getElementById('docsList');
+  let html = '';
+  DOCUMENTS.forEach(group => {
+    html += `<div class="doc-category">${group.category}</div>`;
+    group.docs.forEach((doc, i) => {
+      const idx = `${group.category}__${i}`;
+      html += `
+        <div class="doc-card" onclick="openDocModal('${encodeURIComponent(idx)}')">
+          <div class="doc-icon">${doc.icon}</div>
+          <div class="doc-info">
+            <div class="doc-name">${doc.name}</div>
+            <div class="doc-desc">${doc.desc}</div>
+          </div>
+          <div class="doc-status ${doc.ready ? 'ready' : ''}">${doc.ready ? 'Ready' : 'Placeholder'}</div>
+        </div>`;
+    });
+  });
+  container.innerHTML = html;
+}
+function openDocModal(idxKey) {
+  const [category, i] = decodeURIComponent(idxKey).split('__');
+  const group = DOCUMENTS.find(g => g.category === category);
+  const doc = group.docs[parseInt(i)];
+  const modalContent = document.getElementById('docModalContent');
+  modalContent.innerHTML = `
+    <div style="font-size:2rem;">${doc.icon}</div>
+    <h2 style="margin-top:8px;">${doc.name}</h2>
+    <div class="empty">${doc.desc}</div>
+    <div class="section-label">File Reference</div>
+    <p style="font-size:0.85rem; font-family:monospace; word-break:break-all; color:var(--muted);">${doc.file}</p>
+    <div class="doc-status ${doc.ready ? 'ready' : ''}" style="margin-top:10px;">${doc.ready ? 'Ready to open' : 'Placeholder -- not yet linked'}</div>
+    <a class="doc-link" href="docs/${doc.file}" target="_blank" onclick="${doc.ready ? '' : "event.preventDefault(); alert('Placeholder only.\\n\\nAdd this PDF to /docs in the repo and set ready:true to activate: docs/" + doc.file + "');"}">
+      ${doc.ready ? 'Open Document' : 'Preview link (not yet active)'} &#8594;
+    </a>
+  `;
+  document.getElementById('docModal').classList.add('active');
+}
+function closeDocModal() { document.getElementById('docModal').classList.remove('active'); }
+
+const ALL_STOPS = [
+  { region: "Alps Trip 2026", city: "Vienna", country: "Austria", coordinates: [48.2082, 16.3738],
+    history_and_trivia: ["Vienna was the seat of the Habsburg dynasty for over 600 years.", "UNESCO-listed coffeehouse culture.", "Birthplace of psychoanalysis and 12-tone music."],
+    food_and_drink: { signature_dishes: ["Wiener Schnitzel", "Tafelspitz", "Sachertorte", "Kaiserschmarrn"], signature_drink: "Wiener Melange", hidden_local_spots: ["Gasthaus Poeschl", "Karmelitermarkt", "Cafe Sperl", "Heuriger in Grinzing/Nussdorf"] },
+    sights_and_lesser_known_haunts: ["Kahlenberg lookout", "Zentralfriedhof", "Raimundhof passage", "Donaukanal"],
+    music_note: "City of Strauss waltzes; Gala Viennese Concert is the classic pick.",
+    deep_tip: "You're here in Sturm (young wine) season -- toast with 'Mahlzeit' not 'Prost', hold the glass in your left hand." },
+  { region: "Alps Trip 2026", city: "Salzburg", country: "Austria", coordinates: [47.8095, 13.0550],
+    history_and_trivia: ["Name means 'Salt Fortress'.", "Mozart born here in 1756.", "Sound of Music filmed here and at Mondsee."],
+    food_and_drink: { signature_dishes: ["Salzburger Nockerl", "Kaesespaetzle", "Bosna sausage"], signature_drink: "Stiegl beer since 1492", hidden_local_spots: ["Augustiner Braustuebl", "Schranne Market", "Steingasse early morning"] },
+    sights_and_lesser_known_haunts: ["Kapuzinerberg Stefan-Zweig-Weg trail", "Nonnberg Abbey"],
+    music_note: "Salzburg Festival in summer; small Baroque concerts year-round.",
+    deep_tip: "The Almkanal underground waterway drains once a year each September -- ask the hotel desk." },
+  { region: "Alps Trip 2026", city: "Munich", country: "Germany", coordinates: [48.1351, 11.5820],
+    history_and_trivia: ["Name means 'by the monks'.", "Since 1812, Biergartens must allow outside food.", "Chestnut trees kept underground beer cellars cool."],
+    food_and_drink: { signature_dishes: ["Weisswurst", "Schweinshaxe", "Obatzda", "Brezn"], signature_drink: "Munich Helles lager", hidden_local_spots: ["Augustiner-Keller (1328)", "Zum Flaucher riverside", "Hirschgarten with deer sanctuary"] },
+    sights_and_lesser_known_haunts: ["Englischer Garten Eisbach surfers", "Flauchersteg bridge"],
+    music_note: "Oompah brass bands in the beer halls -- fun, unpretentious.",
+    deep_tip: "You're at the tail end of beer garden season -- weather closures are genuinely possible, call ahead." },
+  { region: "Alps Trip 2026", city: "Innsbruck", country: "Austria", coordinates: [47.2692, 11.4041],
+    history_and_trivia: ["Hosted Winter Olympics twice (1964, 1976).", "Golden Roof built for Maximilian I around 1500.", "Sits between the Nordkette and Patscherkofel ranges."],
+    food_and_drink: { signature_dishes: ["Tiroler Groestl", "Kasnocken", "Eiterbeule"], signature_drink: "Tyrolean Schnapps", hidden_local_spots: ["Markthalle Innsbruck", "Die Vitrine sandwich shop", "Buzihuette forest eatery"] },
+    sights_and_lesser_known_haunts: ["Bergisel ski jump by Zaha Hadid", "Muehlau district"],
+    music_note: "Deep Tyrolean folk traditions -- yodeling, alphorns.",
+    deep_tip: "The Muehlauer Roemerweg trail gives Nordkette views without cable car crowds." },
+  { region: "Alps Trip 2026", city: "St Moritz", country: "Switzerland", coordinates: [46.4908, 9.8355],
+    history_and_trivia: ["Birthplace of Alpine winter tourism (1864 bet).", "Hosted Winter Olympics twice (1928, 1948).", "300+ days of sunshine a year."],
+    food_and_drink: { signature_dishes: ["Engadiner Nusstorte", "Capuns", "Buendnerfleisch"], signature_drink: "Local Grisons wine", hidden_local_spots: ["Corviglia mountain-hut restaurants"] },
+    sights_and_lesser_known_haunts: ["Segantini Museum", "Bernina Pass rail journey"],
+    music_note: "Quiet mountain soundscape; the Bernina rail line through glacier country.",
+    deep_tip: "Nietzsche wrote part of Zarathustra in nearby Sils Maria -- a future side-trip idea." },
+  { region: "Alps Trip 2026", city: "Lucerne", country: "Switzerland", coordinates: [47.0502, 8.3093],
+    history_and_trivia: ["Chapel Bridge dates to 1333.", "Lion Monument commemorates Swiss Guards (1792).", "Sits between Lake Lucerne, Pilatus, and Rigi."],
+    food_and_drink: { signature_dishes: ["Chuegelipastete", "Stunggis stew", "Cheese fondue"], signature_drink: "Swiss wine from Ticino/Valais", hidden_local_spots: ["Wirtshaus Taube", "Spreuerbruecke bridge"] },
+    sights_and_lesser_known_haunts: ["Stanserhorn CabriO cable car", "Pilatus vs Rigi decision"],
+    music_note: "Lucerne Festival in summer; relaxed lakeside cafe culture daily.",
+    deep_tip: "Pilatus/Rigi likely won't fit alongside your Day 11 Stanserhorn plan -- manage expectations." },
+  { region: "Maritime Test Region", city: "Shediac", country: "New Brunswick, Canada", coordinates: [46.2196, -64.5410],
+    history_and_trivia: ["Lobster Capital of the World.", "Name from Mi'kmaq 'Es-ed-ei-ik'.", "First transatlantic commercial flights left here in 1937."],
+    food_and_drink: { signature_dishes: ["Fresh lobster", "Rappie pie", "Poutine rapee"], signature_drink: "Local Maritime craft beer", hidden_local_spots: ["Pointe-du-Chene Wharf", "Homarus Eco-Centre"] },
+    sights_and_lesser_known_haunts: ["Parlee Beach", "Pascal Poirier House Museum"],
+    music_note: "Traditional Acadian fiddle and accordion.",
+    deep_tip: "The Giant Lobster statue weighs about 90 tons." },
+  { region: "Maritime Test Region", city: "Moncton", country: "New Brunswick, Canada", coordinates: [46.0878, -64.7782],
+    history_and_trivia: ["Sits on the 'Chocolate River' (Petitcodiac).", "Famous for its tidal bore.", "NB's bilingual hub."],
+    food_and_drink: { signature_dishes: ["Seafood chowder", "Poutine rapee", "Lobster roll"], signature_drink: "Pump House Brewery beer", hidden_local_spots: ["Tide & Boar Gastropub", "Pisces riverside"] },
+    sights_and_lesser_known_haunts: ["Bore Park", "Magnetic Hill"],
+    music_note: "Active indie and francophone music scene.",
+    deep_tip: "Check tide tables before heading to Bore Park." },
+  { region: "Maritime Test Region", city: "Amherst", country: "Nova Scotia, Canada", coordinates: [45.8163, -64.2065],
+    history_and_trivia: ["Mi'kmaq name means 'going up rising ground'.", "Founded 1764 after the Acadian Expulsion.", "Sits on the Isthmus of Chignecto."],
+    food_and_drink: { signature_dishes: ["Maritime diner fare", "Bay of Fundy seafood"], signature_drink: "Local NS craft beer", hidden_local_spots: ["Diners and bakeries on Victoria Street"] },
+    sights_and_lesser_known_haunts: ["Fort Beausejour", "Amherst Point Bird Sanctuary"],
+    music_note: "Occasional traditional NS fiddle nights.",
+    deep_tip: "Fort Beausejour marks the historic Acadia/NS border conflict." },
+  { region: "Maritime Test Region", city: "Pugwash", country: "Nova Scotia, Canada", coordinates: [45.8574, -63.6659],
+    history_and_trivia: ["Mi'kmaq name means 'shallow water'.", "Hosted the 1957 Pugwash Conferences -- won the 1995 Nobel Peace Prize.", "Annual Gathering of the Clans Highland festival."],
+    food_and_drink: { signature_dishes: ["Northumberland Strait seafood", "NS lobster suppers"], signature_drink: "Local NS cider", hidden_local_spots: ["Wharf-side seafood shacks -- seasonal"] },
+    sights_and_lesser_known_haunts: ["Pugwash Harbour", "Thinkers' Lodge"],
+    music_note: "Scottish pipe bands and Highland dancing.",
+    deep_tip: "Thinkers' Lodge hosted the actual Nobel-Prize-winning 1957 conference." }
+];
+
+let map, userMarker, stopMarkers = [];
+function initMap() {
+  map = L.map('map').setView([46.5, 10.5], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 18
+  }).addTo(map);
+  ALL_STOPS.forEach(s => {
+    const marker = L.marker(s.coordinates).addTo(map).bindPopup(`<strong>${s.city}</strong><br>${s.country}`);
+    stopMarkers.push(marker);
+  });
+}
+function updateMapWithUser(lat, lon, nearestStop) {
+  if (!map) return;
+  if (userMarker) map.removeLayer(userMarker);
+  const userIcon = L.divIcon({ className: 'user-pin', html: '<div style="background:#4fb3ff;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 0 6px rgba(0,0,0,0.5);"></div>' });
+  userMarker = L.marker([lat, lon], { icon: userIcon }).addTo(map).bindPopup('You are here').openPopup();
+  map.setView([lat, lon], nearestStop && nearestStop.distanceKm < 50 ? 11 : 8);
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function locateMe() {
+  const status = document.getElementById('status');
+  if (!navigator.geolocation) { status.className = 'warn'; status.innerText = 'Geolocation not supported.'; return; }
+  status.className = ''; status.innerText = 'Requesting location permission...';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      status.className = 'ok'; status.innerText = `Location found (accuracy ~${Math.round(accuracy)}m).`;
+      findNearest(latitude, longitude);
+    },
+    (err) => {
+      status.className = 'warn';
+      let msg = 'Could not get location: ';
+      if (err.code === err.PERMISSION_DENIED) msg += 'permission denied. Use manual mode below.';
+      else if (err.code === err.POSITION_UNAVAILABLE) msg += 'position unavailable.';
+      else if (err.code === err.TIMEOUT) msg += 'timed out.';
+      else msg += err.message;
+      status.innerText = msg;
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+  );
+}
+function findNearest(lat, lon) {
+  const withDist = ALL_STOPS.map(s => ({ ...s, distanceKm: haversineKm(lat, lon, s.coordinates[0], s.coordinates[1]) })).sort((a, b) => a.distanceKm - b.distanceKm);
+  renderStop(withDist[0]);
+  updateMapWithUser(lat, lon, withDist[0]);
+}
+function renderStop(stop) {
+  const panel = document.getElementById('resultPanel');
+  const isFar = stop.distanceKm > 50;
+  const pillClass = isFar ? 'distance-pill far' : 'distance-pill';
+  const pillText = isFar ? `${Math.round(stop.distanceKm)} km away -- outside 50km radius` : `${stop.distanceKm.toFixed(1)} km away`;
+  panel.innerHTML = `
+    <span class="badge">${stop.region}</span>
+    <div class="${pillClass}">${pillText}</div>
+    <h2 style="margin-top:8px;">${stop.city}</h2>
+    <div class="empty">${stop.country} &middot; <span class="coord">${stop.coordinates[0]}, ${stop.coordinates[1]}</span></div>
+    <div class="section-label">Deep Tip</div><ul><li>${stop.deep_tip}</li></ul>
+    <div class="section-label">History &amp; Trivia</div><ul>${stop.history_and_trivia.map(t => `<li>${t}</li>`).join('')}</ul>
+    <div class="section-label">Signature Dishes</div><div class="dish-list">${stop.food_and_drink.signature_dishes.map(d => `<span>${d}</span>`).join('')}</div>
+    <div class="section-label">Hidden Local Spots</div><ul>${stop.food_and_drink.hidden_local_spots.map(s => `<li>${s}</li>`).join('')}</ul>
+    <div class="section-label">Sights &amp; Haunts</div><ul>${stop.sights_and_lesser_known_haunts.map(s => `<li>${s}</li>`).join('')}</ul>
+    <div class="section-label">Music Note</div><ul><li>${stop.music_note}</li></ul>`;
+}
+let manualRegion = null;
+function toggleManual() {
+  const p = document.getElementById('manualPanel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  if (p.style.display === 'block' && !manualRegion) setRegion('alps');
+}
+function setRegion(key) {
+  manualRegion = key === 'alps' ? 'Alps Trip 2026' : 'Maritime Test Region';
+  const stops = ALL_STOPS.filter(s => s.region === manualRegion);
+  const picker = document.getElementById('locationPicker');
+  picker.innerHTML = '<option value="">-- select a stop --</option>' + stops.map((s) => `<option value="${ALL_STOPS.indexOf(s)}">${s.city}, ${s.country}</option>`).join('');
+}
+function renderManual() {
+  const idx = document.getElementById('locationPicker').value;
+  if (idx === '') return;
+  const stop = ALL_STOPS[idx];
+  renderStop({ ...stop, distanceKm: 0 });
+  if (map) map.setView(stop.coordinates, 12);
+}
+
+const ITINERARY = [
+  {day:1, date:"2026-10-02", title:"Welcome to Vienna", meta:"Arrival transfers, Welcome Dinner",
+   detail:"Arrival transfers depart the airport at 10:00, 13:00, and 15:30. Meet your Travel Director Sue Mason at 17:30 in the Hilton Vienna Park lobby (Blue Insight uniform) to collect luggage labels and your Vox listening device. Coach departs 17:30 for the Welcome Dinner.",
+   meals:"Dinner", venue:"Melker Stiftskeller, Schottengasse 3, Vienna (+43 15335530)"},
+  {day:2, date:"2026-10-03", title:"Vienna and the Habsburgs", meta:"Schonbrunn Palace, Ringstrasse",
+   detail:"Private tour of Schonbrunn Palace and gardens. City highlights include St. Charles' Church, Hofburg Palace, Parliament, State Opera House. Optional: Dinner in a Country Mansion (79 EUR), Gala Viennese Concert (74 EUR), or Vibrant Vienna & Coffee Culture walk (53 EUR).",
+   meals:"Breakfast", venue:""},
+  {day:3, date:"2026-10-04", title:"On to Salzburg", meta:"Melk Abbey, Mondsee Basilica",
+   detail:"Drive through Austrian countryside to Salzburg, visiting Melk Abbey and Mondsee's Basilica St. Michael (featured in The Sound of Music). Optional: Evening in the Austrian Countryside (74 EUR).",
+   meals:"Breakfast", venue:""},
+  {day:4, date:"2026-10-05", title:"The City of Mozart", meta:"Mirabell Palace, Mozart's birthplace",
+   detail:"Mirabell Palace gardens, Residenzplatz, the city fortress, and Old Town cathedral. Visit Mozart's birthplace with a pianoforte demonstration. Evening Farm-to-Table dining. Optional: Eagle's Nest & The Bavarian Alps (81 EUR, weather dependent).",
+   meals:"Breakfast, Dinner", venue:""},
+  {day:5, date:"2026-10-06", title:"Salzburg to Munich", meta:"Lake Chiemsee, Bavarian beer hall",
+   detail:"Boat across Lake Chiemsee to Herrenchiemsee (King Ludwig II's palace) and Fraueninsel. Continue by coach to Munich. Evening at a traditional Bavarian beer hall with your Travel Director.",
+   meals:"Breakfast, Dinner", venue:""},
+  {day:6, date:"2026-10-07", title:"Explore Munich and Dachau", meta:"Marienplatz, Dachau Memorial",
+   detail:"Munich orientation: university, Victory Arch, Marienplatz/Glockenspiel. Insight Choice: culinary walking tour OR Munich Residenz visit. Afternoon at Dachau Concentration Camp Memorial Site.",
+   meals:"Breakfast", venue:""},
+  {day:7, date:"2026-10-08", title:"On to Innsbruck", meta:"Neuschwanstein Castle, Oberammergau",
+   detail:"Visit Neuschwanstein Castle (subject to availability) and Oberammergau (Passion Play town), then on to Innsbruck. Evening Dine-Around -- choose your own restaurant. Optional: Tyrolean Evening (62 EUR, incl. 2 drinks).",
+   meals:"Breakfast, Dinner", venue:""},
+  {day:8, date:"2026-10-09", title:"Beautiful Innsbruck", meta:"Golden Roof, ski jump visit",
+   detail:"Guided tour of Old Town's 14th-century houses, the Imperial Palace, and the Golden Roof. Visit a ski jump with a demonstration by a ski jumper. Optional: Nordkette Alps & Heritage (87 EUR) or Swarovski Crystal World and Dinner (100 EUR).",
+   meals:"Breakfast", venue:""},
+  {day:9, date:"2026-10-10", title:"Engadine Valley to St. Moritz", meta:"Scenic Alpine drive",
+   detail:"Scenic drive through the Engadine Valley into Switzerland to the chic resort of St. Moritz. Optional: Rail Journey Over The Bernina Pass (62 CHF), a UNESCO World Heritage rail line.",
+   meals:"Breakfast, Dinner", venue:""},
+  {day:10, date:"2026-10-11", title:"Glacier Express to Lucerne", meta:"Albula Pass, Lion Monument",
+   detail:"Iconic Glacier Express train journey through the Albula Pass and over the Landwasser Viaduct to Andermatt, then coach through the Schollenen Gorge to Lucerne. See the Lion Monument. Optional: Lake Lucerne Cruise (51 CHF) or Swiss Evening fondue and folklore (120 CHF).",
+   meals:"Breakfast", venue:""},
+  {day:11, date:"2026-10-12", title:"Dinner at Stanserhorn", meta:"Free morning, rotating-restaurant dinner",
+   detail:"Free morning in Lucerne (Chapel Bridge, Jesuit Church). Afternoon MAKE TRAVEL MATTER juice tasting in Stans, then funicular and CabriO cable car to the Stanserhorn summit for dinner in the rotating Drehrestaurant Rondorama. Optional: Carriages & Countryside horse-drawn ride (83 CHF).",
+   meals:"Breakfast, Dinner", venue:""},
+  {day:12, date:"2026-10-13", title:"Leave Lucerne for Zurich", meta:"Departure transfer, arrive ZRH 08:00",
+   detail:"Your Alpine adventure ends this morning with a transfer to Zurich Airport (ZRH), arriving 08:00.",
+   meals:"Breakfast", venue:""}
+];
+
+function renderItinerary() {
+  const today = new Date().toISOString().slice(0,10);
+  const list = document.getElementById('itineraryList');
+  const progressEl = document.getElementById('tripProgress');
+  let html = '';
+  ITINERARY.forEach(d => {
+    const isToday = d.date === today;
+    html += `<div class="day-card ${isToday ? 'today' : ''}" onclick="openDayModal(${d.day})">
+      <span class="day-chevron">&#8250;</span>
+      <div class="day-num">Day ${d.day} -- ${fmtDate(d.date)}${isToday ? ' (TODAY)' : ''}</div>
+      <div class="day-title">${d.title}</div>
+      <div class="day-meta">${d.meta}</div>
+    </div>`;
+  });
+  list.innerHTML = html;
+  const start = new Date("2026-10-02"); const end = new Date("2026-10-13"); const now = new Date();
+  let progressText;
+  if (now < start) progressText = `Trip starts in ${Math.ceil((start - now) / 86400000)} day(s).`;
+  else if (now > end) progressText = "Trip complete! Hope it was unforgettable.";
+  else progressText = `You're on Day ${Math.floor((now - start) / 86400000) + 1} of 12.`;
+  progressEl.innerHTML = `<div style="font-size:1.1rem; font-weight:700; color:var(--accent2);">${progressText}</div>`;
+}
+function openDayModal(dayNum) {
+  const d = ITINERARY.find(x => x.day === dayNum);
+  const modalContent = document.getElementById('dayModalContent');
+  let html = `
+    <div class="day-num">Day ${d.day} -- ${fmtDate(d.date)}</div>
+    <h2 style="margin-top:4px;">${d.title}</h2>
+    <div class="section-label">Details</div>
+    <p style="font-size:0.92rem; line-height:1.5;">${d.detail}</p>
+    <div class="section-label">Meals Included</div>
+    <p style="font-size:0.9rem;">${d.meals}</p>`;
+  if (d.venue) html += `<div class="section-label">Venue</div><p style="font-size:0.9rem;">${d.venue}</p>`;
+  html += `<div class="empty" style="margin-top:10px;">See the Docs tab for related trip paperwork.</div>`;
+  modalContent.innerHTML = html;
+  document.getElementById('dayModal').classList.add('active');
+}
+function closeDayModal() { document.getElementById('dayModal').classList.remove('active'); }
+
+const CHECKLIST_ITEMS = [
+  "Passport (valid 6+ months past return)", "Insight travel documents / vouchers",
+  "Equitable Travel Assist card", "Layers + packable rain jacket",
+  "Comfortable broken-in walking shoes", "Reusable water bottle",
+  "Headphones (backup for Vox audio system)", "Change of clothes in carry-on",
+  "Medication in carry-on", "Power adapter (Europe Type C/F)",
+  "Offline maps downloaded (Organic Maps: Austria, Germany, Switzerland)",
+  "Sunglasses and a hat", "Portable phone charger / power bank"
+];
+function renderChecklist() {
+  const saved = JSON.parse(localStorage.getItem('packingChecklist') || '{}');
+  document.getElementById('checklistItems').innerHTML = CHECKLIST_ITEMS.map((item, i) => `
+    <div class="check-item ${saved[i] ? 'done' : ''}">
+      <input type="checkbox" id="chk${i}" ${saved[i] ? 'checked' : ''} onchange="toggleCheck(${i})">
+      <label for="chk${i}">${item}</label>
+    </div>`).join('');
+}
+function toggleCheck(i) {
+  const saved = JSON.parse(localStorage.getItem('packingChecklist') || '{}');
+  saved[i] = !saved[i];
+  localStorage.setItem('packingChecklist', JSON.stringify(saved));
+  renderChecklist();
+}
+function resetChecklist() { localStorage.removeItem('packingChecklist'); renderChecklist(); }
+
+let liveRates = { EUR: null, CHF: null, fetchedAt: null };
+async function fetchRates(manual) {
+  const meta = document.getElementById('rateMeta');
+  meta.innerText = 'Fetching live rate...';
+  try {
+    const res = await fetch('https://api.frankfurter.dev/v1/latest?base=CAD&symbols=EUR,CHF');
+    if (!res.ok) throw new Error('Network response not ok');
+    const data = await res.json();
+    liveRates.EUR = data.rates.EUR;
+    liveRates.CHF = data.rates.CHF;
+    liveRates.fetchedAt = new Date();
+    localStorage.setItem('lastRates', JSON.stringify(liveRates));
+    meta.innerText = `Live rate as of ${data.date} (source: Frankfurter/ECB)${manual ? ' -- refreshed' : ''}`;
+    convertCurrency();
+  } catch (e) {
+    const cached = JSON.parse(localStorage.getItem('lastRates') || 'null');
+    if (cached) {
+      liveRates = cached;
+      meta.innerText = `Offline -- showing last cached rate from ${new Date(cached.fetchedAt).toLocaleString()}`;
+      convertCurrency();
+    } else {
+      meta.innerText = 'Could not fetch live rate and no cached rate available. Check connection.';
+    }
+  }
+}
+function convertCurrency() {
+  const cad = parseFloat(document.getElementById('cadAmount').value) || 0;
+  const target = document.getElementById('targetCurrency').value;
+  const rate = liveRates[target];
+  if (rate == null) { document.getElementById('currencyResult').innerText = '--'; return; }
+  document.getElementById('currencyResult').innerText = `${(cad * rate).toFixed(2)} ${target}`;
+}
+
+async function translateText() {
+  const text = document.getElementById('translateInput').value.trim();
+  const target = document.getElementById('translateTarget').value;
+  const resultEl = document.getElementById('translateResult');
+  if (!text) { resultEl.innerText = 'Type something to translate.'; return; }
+  resultEl.innerText = 'Translating...';
+  try {
+    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${target}`);
+    if (!res.ok) throw new Error('Network error');
+    const data = await res.json();
+    resultEl.innerText = data.responseData.translatedText;
+  } catch (e) {
+    resultEl.innerText = 'Translation failed -- check your internet connection.';
+  }
+}
+
+const PHRASES = {
+  de: [
+    ["Greetings", [["Hello", "Hallo"], ["Good morning", "Guten Morgen"], ["Good evening", "Guten Abend"], ["Goodbye", "Auf Wiedersehen"], ["How are you?", "Wie geht es Ihnen?"]]],
+    ["Dining", [["A coffee, please", "Einen Melange, bitte"], ["The bill, please", "Zahlen, bitte"], ["Cheers! (wine/beer)", "Prost!"], ["Cheers (Sturm only!)", "Mahlzeit!"], ["Is this vegetarian?", "Ist das vegetarisch?"], ["The check, separately", "Getrennt zahlen, bitte"]]],
+    ["Getting Around", [["Where is...?", "Wo ist...?"], ["How much does this cost?", "Wie viel kostet das?"], ["I don't understand", "Ich verstehe nicht"], ["Do you speak English?", "Sprechen Sie Englisch?"], ["Left / Right / Straight", "Links / Rechts / Geradeaus"]]],
+    ["Politeness", [["Please", "Bitte"], ["Thank you", "Danke"], ["Excuse me", "Entschuldigung"], ["Sorry", "Es tut mir leid"], ["You're welcome", "Bitte schoen"]]]
+  ],
+  fr: [
+    ["Greetings", [["Hello", "Bonjour"], ["Good evening", "Bonsoir"], ["Goodbye", "Au revoir"], ["How are you?", "Comment allez-vous?"]]],
+    ["Dining", [["A coffee, please", "Un cafe, s'il vous plait"], ["The bill, please", "L'addition, s'il vous plait"], ["Cheers!", "Sante!"], ["Is this vegetarian?", "Est-ce vegetarien?"]]],
+    ["Getting Around", [["Where is...?", "Ou est...?"], ["How much does this cost?", "Combien ca coute?"], ["I don't understand", "Je ne comprends pas"], ["Do you speak English?", "Parlez-vous anglais?"]]],
+    ["Politeness", [["Please", "S'il vous plait"], ["Thank you", "Merci"], ["Excuse me", "Excusez-moi"], ["Sorry", "Desole"]]]
+  ]
+};
+function renderPhrases() {
+  const lang = document.getElementById('phraseLang').value;
+  document.getElementById('phraseList').innerHTML = PHRASES[lang].map(cat => `
+    <div class="phrase-cat">${cat[0]}</div>
+    ${cat[1].map(p => `<div class="phrase-row"><span class="phrase-en">${p[0]}</span><span class="phrase-local">${p[1]}</span></div>`).join('')}
+  `).join('');
+}
+
+function saveJournalEntry() {
+  const input = document.getElementById('journalInput');
+  const editId = document.getElementById('journalEditId').value;
+  const text = input.value.trim();
+  if (!text) return;
+  let entries = JSON.parse(localStorage.getItem('tripJournal') || '[]');
+  if (editId) {
+    entries = entries.map(e => e.id === editId ? { ...e, text, editedAt: fmtDate(new Date().toISOString().slice(0,10)) + ' ' + new Date().toLocaleTimeString() } : e);
+  } else {
+    entries.unshift({ id: Date.now().toString(), text, timestamp: fmtDate(new Date().toISOString().slice(0,10)) + ' ' + new Date().toLocaleTimeString() });
+  }
+  localStorage.setItem('tripJournal', JSON.stringify(entries));
+  input.value = '';
+  cancelEdit();
+  renderJournal();
+}
+function editJournalEntry(id) {
+  const entries = JSON.parse(localStorage.getItem('tripJournal') || '[]');
+  const entry = entries.find(e => e.id === id);
+  if (!entry) return;
+  document.getElementById('journalInput').value = entry.text;
+  document.getElementById('journalEditId').value = id;
+  document.getElementById('journalSaveBtn').innerText = 'Update Entry';
+  document.getElementById('journalCancelBtn').style.display = 'block';
+  document.getElementById('journalInput').focus();
+}
+function cancelEdit() {
+  document.getElementById('journalEditId').value = '';
+  document.getElementById('journalSaveBtn').innerText = 'Save Entry';
+  document.getElementById('journalCancelBtn').style.display = 'none';
+}
+function deleteJournalEntry(id) {
+  let entries = JSON.parse(localStorage.getItem('tripJournal') || '[]');
+  entries = entries.filter(e => e.id !== id);
+  localStorage.setItem('tripJournal', JSON.stringify(entries));
+  renderJournal();
+}
+function renderJournal() {
+  const entries = JSON.parse(localStorage.getItem('tripJournal') || '[]');
+  const container = document.getElementById('journalEntries');
+  if (!entries.length) { container.innerHTML = '<div class="empty">No entries yet.</div>'; return; }
+  container.innerHTML = entries.map(e => `
+    <div class="journal-entry">
+      <div class="journal-meta">
+        <span>${e.timestamp}${e.editedAt ? ' (edited ' + e.editedAt + ')' : ''}</span>
+        <span class="journal-actions"><span onclick="editJournalEntry('${e.id}')">Edit</span><span class="del" onclick="deleteJournalEntry('${e.id}')">Delete</span></span>
+      </div>
+      <div class="journal-text">${e.text}</div>
+    </div>`).join('');
+}
+
+initMap();
+renderItinerary();
+renderDocuments();
+renderChecklist();
+renderPhrases();
+renderJournal();
+const cachedRates = JSON.parse(localStorage.getItem('lastRates') || 'null');
+if (cachedRates) { liveRates = cachedRates; convertCurrency(); }
+fetchRates(false);
+</script>
+
+</body>
+</html>
